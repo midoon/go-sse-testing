@@ -4,41 +4,51 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"time"
+
+	"github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
-	mux := http.NewServeMux()
+	stockChannel := make(chan string)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go streamUpdatePrice(ctx, stockChannel)
 
-	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "error stream", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		stockChannel := make(chan string)
-		go streamUpdatePrice(r.Context(), stockChannel)
-
-		for stock := range stockChannel {
-			event := fmt.Sprintf("event: %s \n"+"data: %s \n\n", "price-changed", stock)
-			_, _ = fmt.Fprint(w, event)
-			flusher.Flush()
-		}
-	})
-
-	server := http.Server{
-		Addr:    "localhost:8080",
-		Handler: mux,
-	}
-
-	err := server.ListenAndServe()
+	rmqConn, err := rmqProducerInit()
 	if err != nil {
 		panic(err)
 	}
+
+	rmqChannelConnection, err := rmqConn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
+	for stock := range stockChannel {
+		message := amqp091.Publishing{
+			Headers: amqp091.Table{
+				"ContentType": "text/plain",
+			},
+			Body: []byte(stock),
+		}
+		err := rmqChannelConnection.PublishWithContext(ctx, "sse", "stock", false, false, message)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func rmqProducerInit() (*amqp091.Connection, error) {
+	rmqConnection, err := amqp091.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		panic(err)
+	}
+
+	defer rmqConnection.Close()
+
+	return rmqConnection, err
+
 }
 
 func streamUpdatePrice(ctx context.Context, channel chan<- string) {

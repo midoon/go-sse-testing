@@ -1,4 +1,4 @@
-module go-sse-publisher
+module go-sse-consumer
 
 go 1.21.1
 
