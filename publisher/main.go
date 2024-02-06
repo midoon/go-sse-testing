@@ -20,8 +20,11 @@ func main() {
 		panic(err)
 	}
 
+	defer rmqConn.Close()
+
 	rmqChannelConnection, err := rmqConn.Channel()
 	if err != nil {
+		fmt.Println("error nih")
 		panic(err)
 	}
 
@@ -44,8 +47,6 @@ func rmqProducerInit() (*amqp091.Connection, error) {
 	if err != nil {
 		panic(err)
 	}
-
-	defer rmqConnection.Close()
 
 	return rmqConnection, err
 

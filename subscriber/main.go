@@ -23,6 +23,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+		defer rmqConn.Close()
 
 		rmqChannelConnection, err := rmqConn.Channel()
 		if err != nil {
@@ -35,7 +36,7 @@ func main() {
 		}
 
 		for message := range stockConsumer {
-			event := fmt.Sprintf("event: %s \n"+"data : %s \n\n", "price-changed", string(message.Body))
+			event := fmt.Sprintf("event: %s \n"+"data: %s \n\n", "price-changed", string(message.Body))
 			_, _ = fmt.Fprint(w, event)
 			flusher.Flush()
 		}
@@ -58,8 +59,6 @@ func rmqConsumerInit() (*amqp091.Connection, error) {
 	if err != nil {
 		panic(err)
 	}
-
-	defer rmqConnection.Close()
 
 	return rmqConnection, err
 
